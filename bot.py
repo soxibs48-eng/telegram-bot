@@ -4,6 +4,13 @@ import logging
 import sys
 from typing import Dict
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -31,10 +38,7 @@ logger = logging.getLogger("ImageEnhancerBot")
 if not config.BOT_TOKEN:
     logger.error("BOT_TOKEN aniqlanmadi! .env fayliga bot tokeningizni kiriting.")
 
-bot = Bot(
-    token=config.BOT_TOKEN or "DUMMY_TOKEN",
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-)
+bot = None
 dp = Dispatcher()
 
 # Foydalanuvchi so'nggi yuborgan rasmining file_id sini eslab qolish uchun kesh
@@ -134,7 +138,7 @@ async def process_image_bytes(raw_bytes: bytes, mode: str) -> tuple[bytes, str]:
 
 
 @dp.message(F.photo)
-async def handle_photo(message: Message):
+async def handle_photo(message: Message, bot: Bot):
     """
     Foydalanuvchi rasm yuborganda ishlaydigan handler
     """
@@ -181,7 +185,7 @@ async def handle_photo(message: Message):
 
 
 @dp.message(F.document)
-async def handle_document(message: Message):
+async def handle_document(message: Message, bot: Bot):
     """
     Foydalanuvchi fayl/hujjat shaklida rasm yuborganda ishlaydigan handler
     """
@@ -220,7 +224,7 @@ async def handle_document(message: Message):
 
 
 @dp.callback_query(F.data.startswith("mode:"))
-async def handle_mode_change(callback: CallbackQuery):
+async def handle_mode_change(callback: CallbackQuery, bot: Bot):
     """
     Inline tugmalar orqali rejimni almashtirganda ishlaydi
     """
@@ -266,7 +270,7 @@ async def handle_mode_change(callback: CallbackQuery):
 
 
 @dp.callback_query(F.data.startswith("doc:"))
-async def handle_send_as_doc(callback: CallbackQuery):
+async def handle_send_as_doc(callback: CallbackQuery, bot: Bot):
     """
     Rasmni Telegram siqishisiz, to'liq sifatli fayl (document) sifatida yuklab berish
     """
@@ -299,16 +303,23 @@ async def handle_send_as_doc(callback: CallbackQuery):
 
 
 async def main():
-    logger.info("Bot ishga tushmoqda...")
-    if not config.BOT_TOKEN or config.BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
-        print("\n" + "=" * 60)
-        print("DIQQAT: Botni ishga tushirishdan oldin .env faylida BOT_TOKEN ni kiriting!")
-        print("1. Telegramda @BotFather ga kiring")
-        print("2. /newbot buyrug'i orqali yangi bot yarating va TOKEN oling")
-        print("3. .env faylini ochib, BOT_TOKEN=sizning_tokeningiz qatorini yozing")
-        print("=" * 60 + "\n")
+    token = config.BOT_TOKEN.strip()
+    if not token or token == "YOUR_TELEGRAM_BOT_TOKEN_HERE" or ":" not in token:
+        print("\n" + "=" * 65)
+        print("⚠️  DIQQAT: Botni ishga tushirish uchun BOT_TOKEN kiritilishi shart!")
+        print("1. Telegramda @BotFather ga kiring va /newbot orqali bot oching.")
+        print("2. Olingan tokenni '.env' faylidagi BOT_TOKEN qatoriga yozing:")
+        print("   BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ")
+        print("3. So'ngra 'python bot.py' buyrug'ini qayta bajaring.")
+        print("=" * 65 + "\n")
         return
 
+    bot = Bot(
+        token=token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+
+    logger.info("Bot ishga tushdi va xabarlarni qabul qilishga tayyor...")
     # Eski kutilmagan yangilanishlarni tozalash (drop pending updates)
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
